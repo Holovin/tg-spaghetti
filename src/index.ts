@@ -8,7 +8,7 @@ import { escapeMarkdown } from './helpers';
 const config = nconf.env().file({ file: 'config.json' });
 const logger = createLoggerWrap();
 
-const chatId = +config.get('telegram:chat');
+const configChatId = +config.get('telegram:chat');
 const adminId = +config.get('telegram:admin');
 const telegramToken = config.get('telegram:token');
 const aiToken = config.get('openai:token');
@@ -25,7 +25,7 @@ const bot = new Bot<SessionContext>(telegramToken);
 
 logger.info(`== SQD SPGHT config ==` +
     `\nStarted, settings:\n` +
-    `- chatId: ${chatId}\n` +
+    `- chatId: ${configChatId}\n` +
     `- adminId: ${adminId}\n`,
 );
 
@@ -64,7 +64,7 @@ function processAiMsg(aiMsg: SPGTResponse): string {
 
 async function check(ctx: SessionContext, next: NextFunction): Promise<void> {
     const chatId = ctx?.message?.chat?.id;
-    if (!chatId || (chatId !== chatId  && chatId !== adminId)) {
+    if (!chatId || (chatId !== configChatId && chatId !== adminId)) {
         logger.debug(`mid: skip message from -- ${chatId}`);
         return;
     }
@@ -95,7 +95,7 @@ async function initBot(bot: Bot<SessionContext, Api<RawApi>>) {
             return;
         }
 
-        await bot.api.sendChatAction(chatId, 'typing');
+        await bot.api.sendChatAction(configChatId, 'typing');
 
         const aiMsg = await requestAi(openai,
             ctx.message?.reply_to_message?.text ? ctx.message.reply_to_message.text : ctx.match
@@ -122,7 +122,7 @@ async function initBot(bot: Bot<SessionContext, Api<RawApi>>) {
             return;
         }
 
-        await bot.api.sendChatAction(chatId, 'typing');
+        await bot.api.sendChatAction(configChatId, 'typing');
         const aiMsg = await requestAi(openai, `объясни этот текст: ${ctx.message.reply_to_message.text}`);
         const msg = processAiMsg(aiMsg);
 
@@ -146,7 +146,7 @@ async function initBot(bot: Bot<SessionContext, Api<RawApi>>) {
             return;
         }
 
-        await bot.api.sendChatAction(chatId, 'typing');
+        await bot.api.sendChatAction(configChatId, 'typing');
         const aiMsg = await requestAi(openai, `суммаризируй этот текст вкратце: ${ctx.message.reply_to_message.text}`);
         const msg = processAiMsg(aiMsg);
 
