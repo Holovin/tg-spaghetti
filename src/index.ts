@@ -90,29 +90,28 @@ async function initBot(bot: Bot<SessionContext, Api<RawApi>>) {
 
     // COMMANDS //
     bot.command('ask', async (ctx: SessionContext) => {
-        ctx.session.isBusy = true;
-        if (typeof ctx.match !== 'string') {
+        const chatId = ctx?.message?.chat?.id;
+        if (typeof ctx.match !== 'string' || !chatId) {
             return;
         }
 
-        await bot.api.sendChatAction(configChatId, 'typing');
+        await bot.api.sendChatAction(chatId, 'typing');
 
-        const aiMsg = await requestAi(openai,
-            ctx.message?.reply_to_message?.text ? ctx.message.reply_to_message.text : ctx.match
-        );
+        ctx.session.isBusy = true;
+        const aiMsg = await requestAi(openai, ctx.message?.reply_to_message?.text ? ctx.message.reply_to_message.text : ctx.match);
+        ctx.session.isBusy = false;
+
         const msg = processAiMsg(aiMsg);
 
         await ctx.reply(escapeMarkdown(msg), {
             parse_mode: 'MarkdownV2',
             reply_to_message_id: ctx.message?.message_id,
         });
-
-        ctx.session.isBusy = false;
     });
 
     bot.command('explain', async (ctx: SessionContext) => {
-        ctx.session.isBusy = true;
-        if (typeof ctx.match !== 'string') {
+        const chatId = ctx?.message?.chat?.id;
+        if (typeof ctx.match !== 'string' || !chatId) {
             return;
         }
 
@@ -122,21 +121,21 @@ async function initBot(bot: Bot<SessionContext, Api<RawApi>>) {
             return;
         }
 
-        await bot.api.sendChatAction(configChatId, 'typing');
+        await bot.api.sendChatAction(chatId, 'typing');
+        ctx.session.isBusy = true;
         const aiMsg = await requestAi(openai, `объясни этот текст: ${ctx.message.reply_to_message.text}`);
+        ctx.session.isBusy = false;
         const msg = processAiMsg(aiMsg);
 
         await ctx.reply(escapeMarkdown(msg), {
             parse_mode: 'MarkdownV2',
             reply_to_message_id: ctx.message?.message_id,
         });
-
-        ctx.session.isBusy = false;
     });
 
     bot.command('summarize', async (ctx: SessionContext) => {
-        ctx.session.isBusy = true;
-        if (typeof ctx.match !== 'string') {
+        const chatId = ctx?.message?.chat?.id;
+        if (typeof ctx.match !== 'string' || !chatId) {
             return;
         }
 
@@ -146,21 +145,19 @@ async function initBot(bot: Bot<SessionContext, Api<RawApi>>) {
             return;
         }
 
-        await bot.api.sendChatAction(configChatId, 'typing');
+        await bot.api.sendChatAction(chatId, 'typing');
+        ctx.session.isBusy = true;
         const aiMsg = await requestAi(openai, `суммаризируй этот текст вкратце: ${ctx.message.reply_to_message.text}`);
+        ctx.session.isBusy = false;
         const msg = processAiMsg(aiMsg);
 
         await ctx.reply(escapeMarkdown(msg), {
             parse_mode: 'MarkdownV2',
             reply_to_message_id: ctx.message?.message_id,
         });
-
-        ctx.session.isBusy = false;
     });
 
     bot.command('vermishel', async (ctx: SessionContext) => {
-        console.log(ctx);
-
         if (Math.random() > 0.99) {
             await ctx.reply(escapeMarkdown('Ладно, в этот раз поем.'), {
                 parse_mode: 'MarkdownV2',
