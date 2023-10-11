@@ -40,15 +40,15 @@ function processAiMsg(aiMsg: SPGTResponse): string {
 
     let extra = '';
     if (aiMsg.result.reason === 'content_filter') {
-        extra = '🔞';
+        extra += '🔞';
     } else if (aiMsg.result.reason === 'function_call') {
-        extra = '🤡';
+        extra += '🤡';
     } else if (aiMsg.result.reason === 'length') {
-        extra = '✂️';
+        extra += '✂️';
     } else if (aiMsg.result.reason === 'stop') {
-        extra = '🤖';
+        // extra += '🤖';
     } else {
-        extra = aiMsg.result.reason ?? '?';
+        extra += aiMsg.result.reason ?? '?';
     }
 
     // if (aiMsg.usage?.total) {
