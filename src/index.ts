@@ -17,6 +17,7 @@ const openai = new OpenAI({ apiKey: aiToken });
 
 interface SessionData {
     isBusy: boolean;
+    timerId: number;
 }
 
 type SessionContext = Context & SessionFlavor<SessionData>;
@@ -65,23 +66,65 @@ function processAiMsg(aiMsg: SPGTResponse): string {
 async function check(ctx: SessionContext, next: NextFunction): Promise<void> {
     const chatId = ctx?.message?.chat?.id;
     if (!chatId || (chatId !== configChatId && chatId !== adminId)) {
-        logger.debug(`mid: skip message from -- ${chatId}`);
+        logger.debug(`mid: skip message from --  ${ctx.update.update_id} -- ${chatId}`);
         return;
     }
 
     if (ctx?.session?.isBusy) {
-        logger.debug(`mid: busy for message from -- ${chatId}`);
+        logger.debug(`mid: busy for message from --  ${ctx.update.update_id} -- ${chatId}`);
         return;
     }
 
+    if (!ctx.message?.reply_to_message || !ctx.message.reply_to_message.text) {
+        logger.debug(`mid: skip no reply -- ${ctx.update.update_id} -- ${chatId}`);
+    }
+
     await next();
+}
+
+async function setLoop(trigger: string, payload: string, bot, ctx, chatId: number) {
+    logger.info(`[${trigger}] up_id = ${ctx.update.update_id}, from = ${chatId}`);
+
+    ctx.session.isBusy = true;
+    await bot.api.sendChatAction(chatId, 'typing');
+
+    const id = setInterval(() => {
+        bot.api.sendChatAction(chatId, 'typing').then(() => {});
+    }, 5000);
+
+    const watchId = setTimeout(() => {
+        clearInterval(id);
+        logger.info(`[setLoop] Last chance fix done`);
+    }, 60000);
+
+    let msg = '';
+    if (payload) {
+        const aiMsg = await requestAi(openai, payload);
+        msg = processAiMsg(aiMsg);
+    }
+
+    clearLoop(ctx, id);
+    if (msg) {
+        await ctx.reply(escapeMarkdown(msg), { parse_mode: 'MarkdownV2', reply_to_message_id: ctx.message?.message_id });
+    }
+    logger.info(`[${trigger}] up_id = ${ctx.update.update_id}, msg = ${msg}`);
+    clearTimeout(watchId);
+}
+
+function clearLoop(ctx, id) {
+    ctx.session.isBusy = false;
+    clearInterval(id);
+    logger.info(`[clearLoop] done`);
 }
 
 async function initBot(bot: Bot<SessionContext, Api<RawApi>>) {
     bot.use(
         session({
             initial(): SessionData {
-                return { isBusy: false }
+                return {
+                    isBusy: false,
+                    timerId: -1,
+                }
             }}
         )
     );
@@ -90,76 +133,51 @@ async function initBot(bot: Bot<SessionContext, Api<RawApi>>) {
 
     // COMMANDS //
     bot.command('ask', async (ctx: SessionContext) => {
-        const chatId = ctx?.message?.chat?.id;
-        if (typeof ctx.match !== 'string' || !chatId) {
-            return;
-        }
-
-        await bot.api.sendChatAction(chatId, 'typing');
-
-        ctx.session.isBusy = true;
-        const aiMsg = await requestAi(openai, ctx.message?.reply_to_message?.text ? ctx.message.reply_to_message.text : ctx.match);
-        ctx.session.isBusy = false;
-
-        const msg = processAiMsg(aiMsg);
-
-        await ctx.reply(escapeMarkdown(msg), {
-            parse_mode: 'MarkdownV2',
-            reply_to_message_id: ctx.message?.message_id,
-        });
+        await setLoop(
+            'ask',
+            `${ctx.message!.reply_to_message!.text}`,
+            bot,
+            ctx,
+            ctx.message!.chat!.id!
+        );
     });
 
     bot.command('explain', async (ctx: SessionContext) => {
-        const chatId = ctx?.message?.chat?.id;
-        if (typeof ctx.match !== 'string' || !chatId) {
-            return;
-        }
-
-        // Not reply or empty text
-        if (!ctx.message?.reply_to_message || !ctx.message.reply_to_message.text) {
-            logger.debug(`${ctx.update} :: skip message`);
-            return;
-        }
-
-        await bot.api.sendChatAction(chatId, 'typing');
-        ctx.session.isBusy = true;
-        const aiMsg = await requestAi(openai, `объясни этот текст: ${ctx.message.reply_to_message.text}`);
-        ctx.session.isBusy = false;
-        const msg = processAiMsg(aiMsg);
-
-        await ctx.reply(escapeMarkdown(msg), {
-            parse_mode: 'MarkdownV2',
-            reply_to_message_id: ctx.message?.message_id,
-        });
+        const chatId = ctx.message!.chat!.id!;
+        await setLoop(
+            'explain',
+            `объясни этот текст: ${ctx.message!.reply_to_message!.text}`,
+            bot,
+            ctx,
+            ctx.message!.chat!.id!,
+        );
     });
 
     bot.command('summarize', async (ctx: SessionContext) => {
-        const chatId = ctx?.message?.chat?.id;
-        if (typeof ctx.match !== 'string' || !chatId) {
-            return;
-        }
+        await setLoop(
+            'summarize',
+            `суммаризируй этот текст вкратце (один абзац): ${ctx.message!.reply_to_message!.text}`,
+            bot,
+            ctx,
+            ctx.message!.chat!.id!,
+        );
+    });
 
-        // Not reply or empty text
-        if (!ctx.message?.reply_to_message || !ctx.message.reply_to_message.text) {
-            logger.debug(`${ctx.update} :: skip message`);
-            return;
-        }
-
-        await bot.api.sendChatAction(chatId, 'typing');
-        ctx.session.isBusy = true;
-        const aiMsg = await requestAi(openai, `суммаризируй этот текст вкратце: ${ctx.message.reply_to_message.text}`);
-        ctx.session.isBusy = false;
-        const msg = processAiMsg(aiMsg);
-
-        await ctx.reply(escapeMarkdown(msg), {
-            parse_mode: 'MarkdownV2',
-            reply_to_message_id: ctx.message?.message_id,
-        });
+    bot.command('nepon', async (ctx: SessionContext) => {
+        await setLoop(
+            'nepon',
+            `объясни это в рамках одного небольшого абзаца, понятным языком, не больше 3 предложений: `
+                + `${ctx.message!.reply_to_message!.text}`,
+            bot,
+            ctx,
+            ctx.message!.chat!.id!
+        );
     });
 
     bot.command('vermishel', async (ctx: SessionContext) => {
-        if (Math.random() > 0.99) {
-            await ctx.reply(escapeMarkdown('Ладно, в этот раз поем.'), {
+        const result = Math.random();
+        if (result > 0.995) {
+            await ctx.reply(escapeMarkdown(`Ладно, в этот раз поем (${result})`), {
                 parse_mode: 'MarkdownV2',
                 reply_to_message_id: ctx.message?.message_id,
             });
