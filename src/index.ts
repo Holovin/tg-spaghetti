@@ -148,9 +148,9 @@ async function initBot(bot: Bot<SessionContext, Api<RawApi>>) {
         );
     });
 
-    bot.command('explain', skipNonReplies, async (ctx: SessionContext) => {
+    bot.command('nepon', skipNonReplies, async (ctx: SessionContext) => {
         await setLoop(
-            'explain',
+            'nepon',
             `объясни этот текст: ${ctx.message!.reply_to_message!.text}`,
             bot,
             ctx,
@@ -158,9 +158,9 @@ async function initBot(bot: Bot<SessionContext, Api<RawApi>>) {
         );
     });
 
-    bot.command('explain_mini', skipNonReplies, async (ctx: SessionContext) => {
+    bot.command('nepon_mini', skipNonReplies, async (ctx: SessionContext) => {
         await setLoop(
-            'explain',
+            'nepon_mini',
             `объясни этот текст (коротко, не больше 1 предложения): ${ctx.message!.reply_to_message!.text}`,
             bot,
             ctx,
@@ -171,21 +171,10 @@ async function initBot(bot: Bot<SessionContext, Api<RawApi>>) {
     bot.command('summarize', skipNonReplies, async (ctx: SessionContext) => {
         await setLoop(
             'summarize',
-            `суммаризируй этот текст вкратце (один абзац): ${ctx.message!.reply_to_message!.text}`,
+            `суммаризируй этот текст вкратце (2-3 предложения): ${ctx.message!.reply_to_message!.text}`,
             bot,
             ctx,
             ctx.message!.chat!.id!,
-        );
-    });
-
-    bot.command(['nepon', 'summ'], skipNonReplies, async (ctx: SessionContext) => {
-        await setLoop(
-            'nepon',
-            `объясни это в рамках одного небольшого абзаца, понятным языком, не больше 3 предложений: `
-                + `${ctx.message!.reply_to_message!.text}`,
-            bot,
-            ctx,
-            ctx.message!.chat!.id!
         );
     });
 
