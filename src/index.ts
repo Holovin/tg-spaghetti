@@ -75,8 +75,14 @@ async function check(ctx: SessionContext, next: NextFunction): Promise<void> {
         return;
     }
 
-    if (!ctx.message?.reply_to_message || !ctx.message.reply_to_message.text) {
+    await next();
+}
+
+async function skipNonReplies(ctx: SessionContext, next: NextFunction): Promise<void> {
+    const chatId = ctx?.message?.chat?.id;
+    if (!ctx.message?.reply_to_message || !ctx.message.reply_to_message.text?.trim()) {
         logger.debug(`mid: skip no reply -- ${ctx.update.update_id} -- ${chatId}`);
+        return;
     }
 
     await next();
@@ -111,7 +117,7 @@ async function setLoop(trigger: string, payload: string, bot, ctx, chatId: numbe
     clearTimeout(watchId);
 }
 
-function clearLoop(ctx, id) {
+function clearLoop(ctx: SessionContext, id: NodeJS.Timeout) {
     ctx.session.isBusy = false;
     clearInterval(id);
     logger.info(`[clearLoop] done`);
@@ -132,7 +138,7 @@ async function initBot(bot: Bot<SessionContext, Api<RawApi>>) {
     bot.use(check);
 
     // COMMANDS //
-    bot.command('ask', async (ctx: SessionContext) => {
+    bot.command('ask', skipNonReplies, async (ctx: SessionContext) => {
         await setLoop(
             'ask',
             `${ctx.message!.reply_to_message!.text}`,
@@ -142,8 +148,7 @@ async function initBot(bot: Bot<SessionContext, Api<RawApi>>) {
         );
     });
 
-    bot.command('explain', async (ctx: SessionContext) => {
-        const chatId = ctx.message!.chat!.id!;
+    bot.command('explain', skipNonReplies, async (ctx: SessionContext) => {
         await setLoop(
             'explain',
             `объясни этот текст: ${ctx.message!.reply_to_message!.text}`,
@@ -153,7 +158,17 @@ async function initBot(bot: Bot<SessionContext, Api<RawApi>>) {
         );
     });
 
-    bot.command('summarize', async (ctx: SessionContext) => {
+    bot.command('explain_mini', skipNonReplies, async (ctx: SessionContext) => {
+        await setLoop(
+            'explain',
+            `объясни этот текст (коротко, не больше 1 предложения): ${ctx.message!.reply_to_message!.text}`,
+            bot,
+            ctx,
+            ctx.message!.chat!.id!,
+        );
+    });
+
+    bot.command('summarize', skipNonReplies, async (ctx: SessionContext) => {
         await setLoop(
             'summarize',
             `суммаризируй этот текст вкратце (один абзац): ${ctx.message!.reply_to_message!.text}`,
@@ -163,7 +178,7 @@ async function initBot(bot: Bot<SessionContext, Api<RawApi>>) {
         );
     });
 
-    bot.command('nepon', async (ctx: SessionContext) => {
+    bot.command(['nepon', 'summ'], skipNonReplies, async (ctx: SessionContext) => {
         await setLoop(
             'nepon',
             `объясни это в рамках одного небольшого абзаца, понятным языком, не больше 3 предложений: `
@@ -176,6 +191,7 @@ async function initBot(bot: Bot<SessionContext, Api<RawApi>>) {
 
     bot.command('vermishel', async (ctx: SessionContext) => {
         const result = Math.random();
+
         if (result > 0.995) {
             await ctx.reply(escapeMarkdown(`Ладно, в этот раз поем (${result})`), {
                 parse_mode: 'MarkdownV2',
