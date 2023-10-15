@@ -80,7 +80,7 @@ async function check(ctx: SessionContext, next: NextFunction): Promise<void> {
 
 async function skipNonReplies(ctx: SessionContext, next: NextFunction): Promise<void> {
     const chatId = ctx?.message?.chat?.id;
-    if (!ctx.message?.reply_to_message || !ctx.message.reply_to_message.text?.trim()) {
+    if (!ctx.message?.reply_to_message || (!ctx.message.reply_to_message.text?.trim() && !ctx.message.reply_to_message.caption?.trim())) {
         logger.debug(`mid: skip no reply -- ${ctx.update.update_id} -- ${chatId}`);
         return;
     }
@@ -89,7 +89,7 @@ async function skipNonReplies(ctx: SessionContext, next: NextFunction): Promise<
 }
 
 async function setLoop(trigger: string, payload: string, bot, ctx, chatId: number) {
-    logger.info(`[${trigger}] up_id = ${ctx.update.update_id}, from = ${chatId}`);
+    logger.info(`[${trigger}] up_id = ${ctx.update.update_id}, from = ${chatId}, payload = ${payload}`);
 
     ctx.session.isBusy = true;
     await bot.api.sendChatAction(chatId, 'typing');
@@ -138,10 +138,27 @@ async function initBot(bot: Bot<SessionContext, Api<RawApi>>) {
     bot.use(check);
 
     // COMMANDS //
-    bot.command('ask', skipNonReplies, async (ctx: SessionContext) => {
+    bot.command('ask', async (ctx: SessionContext) => {
+        let ask = '';
+        if (ctx.message?.reply_to_message?.text) {
+            ask += ctx.message!.reply_to_message!.text;
+        }
+
+        if (ctx.message?.reply_to_message?.caption) {
+            ask += ' ' + ctx.message!.reply_to_message!.caption;
+        }
+
+        if (typeof ctx.match === 'string') {
+            ask = `${ctx.match} ${ask}`;
+        }
+
+        if (!ask) {
+            return;
+        }
+
         await setLoop(
             'ask',
-            `${ctx.message!.reply_to_message!.text}`,
+            ask,
             bot,
             ctx,
             ctx.message!.chat!.id!
@@ -151,7 +168,8 @@ async function initBot(bot: Bot<SessionContext, Api<RawApi>>) {
     bot.command('nepon', skipNonReplies, async (ctx: SessionContext) => {
         await setLoop(
             'nepon',
-            `объясни этот текст: ${ctx.message!.reply_to_message!.text}`,
+            `объясни этот текст: `
+                + `${ctx.message!.reply_to_message!.text || ctx.message!.reply_to_message!.caption}`,
             bot,
             ctx,
             ctx.message!.chat!.id!,
@@ -161,17 +179,19 @@ async function initBot(bot: Bot<SessionContext, Api<RawApi>>) {
     bot.command('nepon_mini', skipNonReplies, async (ctx: SessionContext) => {
         await setLoop(
             'nepon_mini',
-            `объясни этот текст (коротко, не больше 1 предложения): ${ctx.message!.reply_to_message!.text}`,
+            `объясни этот текст (коротко, не больше 1 предложения): `
+            + `${ctx.message!.reply_to_message!.text || ctx.message!.reply_to_message!.caption}`,
             bot,
             ctx,
             ctx.message!.chat!.id!,
         );
     });
 
-    bot.command('summarize', skipNonReplies, async (ctx: SessionContext) => {
+    bot.command('summ', skipNonReplies, async (ctx: SessionContext) => {
         await setLoop(
             'summarize',
-            `суммаризируй этот текст вкратце (2-3 предложения): ${ctx.message!.reply_to_message!.text}`,
+            `суммаризируй этот текст вкратце (2-3 предложения): `
+            + `${ctx.message!.reply_to_message!.text || ctx.message!.reply_to_message!.caption}`,
             bot,
             ctx,
             ctx.message!.chat!.id!,
