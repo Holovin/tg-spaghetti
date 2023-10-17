@@ -70,6 +70,7 @@ async function check(ctx: SessionContext, next: NextFunction): Promise<void> {
         return;
     }
 
+    // logger.warn(JSON.stringify(ctx.session));
     if (ctx?.session?.isBusy) {
         logger.debug(`mid: busy for message from --  ${ctx.update.update_id} -- ${chatId}`);
         return;
@@ -88,10 +89,12 @@ async function skipNonReplies(ctx: SessionContext, next: NextFunction): Promise<
     await next();
 }
 
-async function setLoop(trigger: string, payload: string, bot, ctx, chatId: number) {
+async function setLoop(trigger: string, payload: string, bot: Bot<SessionContext, Api<RawApi>>, ctx: SessionContext, chatId: number) {
     logger.info(`[${trigger}] up_id = ${ctx.update.update_id}, from = ${chatId}, payload = ${payload}`);
 
     ctx.session.isBusy = true;
+    // logger.warn(JSON.stringify(ctx.session));
+
     await bot.api.sendChatAction(chatId, 'typing');
 
     const id = setInterval(() => {
@@ -101,20 +104,34 @@ async function setLoop(trigger: string, payload: string, bot, ctx, chatId: numbe
     const watchId = setTimeout(() => {
         clearInterval(id);
         logger.info(`[setLoop] Last chance fix done`);
-    }, 60000);
+    }, 5 * 60 * 1000);
 
-    let msg = '';
-    if (payload) {
-        const aiMsg = await requestAi(openai, payload);
-        msg = processAiMsg(aiMsg);
+    if (!payload) {
+        clearLoop(ctx, id);
+        logger.info(`[${trigger}] up_id = ${ctx.update.update_id}, skip no payload`);
+        clearTimeout(watchId);
+        return;
     }
 
-    clearLoop(ctx, id);
-    if (msg) {
-        await ctx.reply(escapeMarkdown(msg), { parse_mode: 'MarkdownV2', reply_to_message_id: ctx.message?.message_id });
-    }
-    logger.info(`[${trigger}] up_id = ${ctx.update.update_id}, msg = ${msg}`);
-    clearTimeout(watchId);
+    requestAi(openai, payload).then(aiMsg => {
+        const msg = processAiMsg(aiMsg);
+
+        clearLoop(ctx, id);
+        // logger.warn(JSON.stringify(ctx.session));
+
+        if (msg) {
+            const replyId = ctx.message!.reply_to_message?.message_id || ctx.message!.message_id;
+            logger.info(`[${trigger}] up_id = ${ctx.update.update_id}, msg = ${msg}`);
+            bot.api.sendMessage(ctx.message!.chat!.id, escapeMarkdown(msg), {
+                parse_mode: 'MarkdownV2',
+                reply_to_message_id: replyId,
+            }).then(() => {});
+        } else {
+            logger.warn(`[${trigger}] up_id = ${ctx.update.update_id}, no msg`);
+        }
+
+        clearTimeout(watchId);
+    });
 }
 
 function clearLoop(ctx: SessionContext, id: NodeJS.Timeout) {
@@ -152,7 +169,7 @@ async function initBot(bot: Bot<SessionContext, Api<RawApi>>) {
             ask = `${ctx.match} ${ask}`;
         }
 
-        if (!ask) {
+        if (!ask.trim()) {
             return;
         }
 

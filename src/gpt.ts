@@ -24,8 +24,6 @@ export async function requestAi(openai: OpenAI, content: string): Promise<SPGTRe
             max_tokens: 2000,
         });
 
-        console.log(chatCompletion.choices);
-
         return {
             success: true,
             usage: {
