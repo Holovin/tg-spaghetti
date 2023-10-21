@@ -120,7 +120,7 @@ async function setLoop(trigger: string, payload: string, bot: Bot<SessionContext
         // logger.warn(JSON.stringify(ctx.session));
 
         if (msg) {
-            const replyId = ctx.message!.reply_to_message?.message_id || ctx.message!.message_id;
+            const replyId = ctx.message!.message_id;
             logger.info(`[${trigger}] up_id = ${ctx.update.update_id}, msg = ${msg}`);
             bot.api.sendMessage(ctx.message!.chat!.id, escapeMarkdown(msg), {
                 parse_mode: 'MarkdownV2',
@@ -229,7 +229,7 @@ async function initBot(bot: Bot<SessionContext, Api<RawApi>>) {
 
 async function main() {
     await initBot(bot);
-    bot.start().then(() => { logger.warn('HOW?') });
+    bot.start( { drop_pending_updates: true }).then(() => { logger.warn('HOW?') });
 }
 
 try {
