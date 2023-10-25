@@ -131,6 +131,17 @@ async function setLoop(trigger: string, payload: string, bot: Bot<SessionContext
         }
 
         clearTimeout(watchId);
+
+    }).catch(e => {
+        logger.warn(`[${trigger}] up_id = ${ctx.update.update_id}, e = ${JSON.stringify(e)}`);
+        const replyId = ctx.message!.message_id;
+        bot.api.sendMessage(ctx.message!.chat!.id, escapeMarkdown(`Неизвестная ошибка  up_id = ${ctx.update.update_id}`), {
+            parse_mode: 'MarkdownV2',
+            reply_to_message_id: replyId,
+        }).then(() => {});
+
+        clearLoop(ctx, id);
+        clearTimeout(watchId);
     });
 }
 
