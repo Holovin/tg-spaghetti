@@ -246,13 +246,14 @@ async function initBot(bot: Bot<SessionContext, Api<RawApi>>) {
             ['🇺🇦', 'Kyiv', 'Europe/Kyiv'],
             ['🇧🇾', 'Minsk', 'Europe/Minsk'],
             ['🇬🇪', 'Tbilisi', 'Asia/Tbilisi'],
+            ['🍏', 'Pacific Time', 'America/Los_Angeles'],
         ];
 
         const str = cityMap
             .map(cityArr => (
                 `${cityArr[0]}` +
                 ` ${escapeMarkdown(formatInTimeZone(date, cityArr[2], 'HH:mm'))}` +
-                ` *${cityArr[1]}*` +
+                ` *${escapeMarkdown(cityArr[1])}*` +
                 ` ${escapeMarkdown(formatInTimeZone(date, cityArr[2], 'x'))} `
             ))
             .join('\n');
