@@ -4,6 +4,7 @@ import { createLoggerWrap } from './logger';
 import OpenAI from 'openai';
 import { requestAi, SPGTResponse } from './gpt';
 import { escapeMarkdown } from './helpers';
+import { formatInTimeZone } from 'date-fns-tz';
 
 const config = nconf.env().file({ file: 'config.json' });
 const logger = createLoggerWrap();
@@ -235,6 +236,28 @@ async function initBot(bot: Bot<SessionContext, Api<RawApi>>) {
                 reply_to_message_id: ctx.message?.message_id,
             });
         }
+    });
+
+    bot.command('time', async (ctx: SessionContext) => {
+        const date = new Date();
+        const cityMap = [
+            ['🇩🇪', 'Berlin', 'Europe/Berlin'],
+            ['🇷🇸', 'Belgrade', 'Europe/Belgrade'],
+            ['🇺🇦', 'Kyiv', 'Europe/Kyiv'],
+            ['🇧🇾', 'Minsk', 'Europe/Minsk'],
+            ['🇬🇪', 'Tbilisi', 'Asia/Tbilisi'],
+        ];
+
+        const str = cityMap
+            .map(cityArr => (
+                `${cityArr[0]}` +
+                ` ${escapeMarkdown(formatInTimeZone(date, cityArr[2], 'HH:mm'))}` +
+                ` *${cityArr[1]}*` +
+                ` ${escapeMarkdown(formatInTimeZone(date, cityArr[2], 'x'))} `
+            ))
+            .join('\n');
+
+        await ctx.reply((str), { parse_mode: 'MarkdownV2' });
     });
 }
 

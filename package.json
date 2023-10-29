@@ -23,7 +23,8 @@
     "typescript": "^5.0.4"
   },
   "dependencies": {
-    "date-fns": "^2.29.3",
+    "date-fns": "^2.30.0",
+    "date-fns-tz": "^2.0.0",
     "grammy": "^1.15.3",
     "keyv": "^4.5.2",
     "nconf": "^0.12.0",
