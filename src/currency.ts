@@ -135,7 +135,13 @@ export function prepareMessage(currencyData: CurrencyData, result: CurrencyResul
                 ? Math.round(exchangeValue)
                 : Math.round((exchangeValue + Number.EPSILON) * 10) / 10;
 
-            groupStr.push(`${currenciesMap[currency].symbol} ${escapeMarkdown(exchangeValueRounded.toString())}`);
+            groupStr.push(`*${currenciesMap[currency].symbol}* ${
+                escapeMarkdown(
+                    exchangeValueRounded === 0 
+                        ? exchangeValue.toFixed(2)
+                        : exchangeValueRounded.toString()
+                )
+            }`);
         }
 
         out += `${groupStr.join('\n')}\n`;
