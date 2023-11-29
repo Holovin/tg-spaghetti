@@ -2,9 +2,23 @@ import { Api, Bot, Context, NextFunction, RawApi, session, SessionFlavor } from 
 import nconf from 'nconf';
 import { createLoggerWrap } from './logger';
 import OpenAI from 'openai';
-import { requestAi, SPGTResponse } from './gpt';
+import { processAiMsg, requestAi } from './gpt';
 import { escapeMarkdown } from './helpers';
-import { formatInTimeZone } from 'date-fns-tz';
+import { convertFixerData, CurrencyData, detectCurrency, getCurrencyData, prepareMessage } from './currency';
+import { getTimes } from './time';
+import { draw, random } from 'radash';
+import i18next from 'i18next';
+import Backend, { FsBackendOptions } from 'i18next-fs-backend';
+
+i18next
+    .use(Backend)
+    .init<FsBackendOptions>({
+        lng: 'en',
+        debug: true,
+        backend: {
+            loadPath: 'local.{{lng}}.json',
+        }
+    });
 
 const config = nconf.env().file({ file: 'config.json' });
 const logger = createLoggerWrap();
@@ -13,12 +27,17 @@ const configChatId = +config.get('telegram:chat');
 const adminId = +config.get('telegram:admin');
 const telegramToken = config.get('telegram:token');
 const aiToken = config.get('openai:token');
+const fixerToken = config.get('fixer:token');
+
 
 const openai = new OpenAI({ apiKey: aiToken });
 
 interface SessionData {
     isBusy: boolean;
     timerId: number;
+    currencyData: CurrencyData;
+    throttleMap: { [key: string]: number };
+    counters: { [key: string]: number };
 }
 
 type SessionContext = Context & SessionFlavor<SessionData>;
@@ -31,47 +50,20 @@ logger.info(`== SQD SPGHT config ==` +
     `- adminId: ${adminId}\n`,
 );
 
-function processAiMsg(aiMsg: SPGTResponse): string {
-    if (!aiMsg.success) {
-        return `💥 [${aiMsg.result?.reason}] ${aiMsg.result?.message ?? 'No error text'}`;
-    }
-
-    if (!aiMsg.result) {
-        return `💥 No response from AI`;
-    }
-
-    let extra = '';
-    if (aiMsg.result.reason === 'content_filter') {
-        extra += '🔞';
-    } else if (aiMsg.result.reason === 'function_call') {
-        extra += '🤡';
-    } else if (aiMsg.result.reason === 'length') {
-        extra += '✂️';
-    } else if (aiMsg.result.reason === 'stop') {
-        // extra += '🤖';
-    } else {
-        extra += aiMsg.result.reason ?? '?';
-    }
-
-    // if (aiMsg.usage?.total) {
-    //     extra += ` (${aiMsg.usage?.total})`
-    // }
-
-    const text = aiMsg.result.message.length > 3500
-        ? `${aiMsg.result.message.substring(0, 3500)}...🔪`
-        : aiMsg.result.message;
-
-    return `${extra} ${text}`;
-}
-
-async function check(ctx: SessionContext, next: NextFunction): Promise<void> {
+// MIDDLEWARES //
+async function checkAccess(ctx: SessionContext, next: NextFunction): Promise<void> {
     const chatId = ctx?.message?.chat?.id;
     if (!chatId || (chatId !== configChatId && chatId !== adminId)) {
         logger.debug(`mid: skip message from --  ${ctx.update.update_id} -- ${chatId}`);
+        bot.api.sendMessage(adminId, escapeMarkdown(`Access warning! From ${chatId}}`), { parse_mode: 'MarkdownV2'}).then(() => {});
         return;
     }
 
-    // logger.warn(JSON.stringify(ctx.session));
+    await next();
+}
+
+async function checkBusy(ctx: SessionContext, next: NextFunction): Promise<void> {
+    const chatId = ctx?.message?.chat?.id;
     if (ctx?.session?.isBusy) {
         logger.debug(`mid: busy for message from --  ${ctx.update.update_id} -- ${chatId}`);
         return;
@@ -90,12 +82,41 @@ async function skipNonReplies(ctx: SessionContext, next: NextFunction): Promise<
     await next();
 }
 
+function throttella(ctx: SessionContext, key: string, limitMs: number): boolean {
+    const now = Date.now();
+    if (now - ctx.session.throttleMap[key] < limitMs) {
+        logger.debug(`skip -- ${key}`);
+        ctx.session.throttleMap[key] = now; // update too for prevent spamming
+        return true;
+    }
+
+    ctx.session.throttleMap[key] = now;
+    return false;
+}
+
+async function countella(ctx: SessionContext, key: string, threshold: number): Promise<void> {
+    if (!ctx.session.counters[key]) {
+        ctx.session.counters[key] = 0;
+    }
+
+    ctx.session.counters[key] += random(0, 3);
+    if (ctx.session.counters[key] < threshold) {
+        logger.debug(`skip sending alert -- ${key} -- ${ctx.session.counters[key]} of ${threshold}`);
+        return;
+    }
+
+    ctx.session.counters[key] = 0;
+    const variants = i18next.t('alerts', { returnObjects: true }) as string[];
+
+    logger.debug(`alert possible -- ${key}`);
+    await ctx.reply(escapeMarkdown(draw(variants) ?? ''), { parse_mode: 'MarkdownV2' });
+}
+
+// QUEUE //
 async function setLoop(trigger: string, payload: string, bot: Bot<SessionContext, Api<RawApi>>, ctx: SessionContext, chatId: number) {
     logger.info(`[${trigger}] up_id = ${ctx.update.update_id}, from = ${chatId}, payload = ${payload}`);
 
     ctx.session.isBusy = true;
-    // logger.warn(JSON.stringify(ctx.session));
-
     await bot.api.sendChatAction(chatId, 'typing');
 
     const id = setInterval(() => {
@@ -118,7 +139,6 @@ async function setLoop(trigger: string, payload: string, bot: Bot<SessionContext
         const msg = processAiMsg(aiMsg);
 
         clearLoop(ctx, id);
-        // logger.warn(JSON.stringify(ctx.session));
 
         if (msg) {
             const replyId = ctx.message!.message_id;
@@ -136,7 +156,7 @@ async function setLoop(trigger: string, payload: string, bot: Bot<SessionContext
     }).catch(e => {
         logger.warn(`[${trigger}] up_id = ${ctx.update.update_id}, e = ${JSON.stringify(e)}`);
         const replyId = ctx.message!.message_id;
-        bot.api.sendMessage(ctx.message!.chat!.id, escapeMarkdown(`Неизвестная ошибка  up_id = ${ctx.update.update_id}`), {
+        bot.api.sendMessage(ctx.message!.chat!.id, escapeMarkdown(`Неизвестная ошибка up_id = ${ctx.update.update_id}`), {
             parse_mode: 'MarkdownV2',
             reply_to_message_id: replyId,
         }).then(() => {});
@@ -152,19 +172,28 @@ function clearLoop(ctx: SessionContext, id: NodeJS.Timeout) {
     logger.info(`[clearLoop] done`);
 }
 
-async function initBot(bot: Bot<SessionContext, Api<RawApi>>) {
+// BOT //
+async function initBot(bot: Bot<SessionContext>) {
     bot.use(
         session({
             initial(): SessionData {
                 return {
                     isBusy: false,
                     timerId: -1,
+                    currencyData: {
+                        lastUpdate: 0,
+                        data: {},
+                        isStable: false,
+                    },
+                    throttleMap: {},
+                    counters: {},
                 }
             }}
         )
     );
 
-    bot.use(check);
+    bot.use(checkAccess);
+    bot.use(checkBusy);
 
     // COMMANDS //
     bot.command('ask', async (ctx: SessionContext) => {
@@ -185,19 +214,13 @@ async function initBot(bot: Bot<SessionContext, Api<RawApi>>) {
             return;
         }
 
-        await setLoop(
-            'ask',
-            ask,
-            bot,
-            ctx,
-            ctx.message!.chat!.id!
-        );
+        await setLoop('ask', ask, bot, ctx, ctx.message!.chat!.id!);
     });
 
     bot.command('nepon', skipNonReplies, async (ctx: SessionContext) => {
         await setLoop(
             'nepon',
-            `объясни этот текст: `
+            i18next.t('prompt.nepon')
                 + `${ctx.message!.reply_to_message!.text || ctx.message!.reply_to_message!.caption}`,
             bot,
             ctx,
@@ -208,7 +231,7 @@ async function initBot(bot: Bot<SessionContext, Api<RawApi>>) {
     bot.command('nepon_mini', skipNonReplies, async (ctx: SessionContext) => {
         await setLoop(
             'nepon_mini',
-            `объясни этот текст (коротко, не больше 1 предложения): `
+            i18next.t('prompt.nepon_mini')
             + `${ctx.message!.reply_to_message!.text || ctx.message!.reply_to_message!.caption}`,
             bot,
             ctx,
@@ -219,7 +242,7 @@ async function initBot(bot: Bot<SessionContext, Api<RawApi>>) {
     bot.command('summ', skipNonReplies, async (ctx: SessionContext) => {
         await setLoop(
             'summarize',
-            `суммаризируй этот текст вкратце (2-3 предложения): `
+            i18next.t('prompt.summ')
             + `${ctx.message!.reply_to_message!.text || ctx.message!.reply_to_message!.caption}`,
             bot,
             ctx,
@@ -228,43 +251,64 @@ async function initBot(bot: Bot<SessionContext, Api<RawApi>>) {
     });
 
     bot.command('vermishel', async (ctx: SessionContext) => {
-        const result = Math.random();
+        if (throttella(ctx, 'vermishel', 5000)) {
+            return;
+        }
 
-        if (result > 0.995) {
-            await ctx.reply(escapeMarkdown(`Ладно, в этот раз поем (${result})`), {
+        const result = Math.random();
+        if (result > 0.991) {
+            logger.info(`[vermishel] trigger = ${result}`);
+            await ctx.reply(escapeMarkdown(`${i18next.t('vermishel')} (${result})`), {
                 parse_mode: 'MarkdownV2',
                 reply_to_message_id: ctx.message?.message_id,
             });
+            return;
         }
+
+        await countella(ctx, 'vermishel', 5);
     });
 
     bot.command('time', async (ctx: SessionContext) => {
-        const date = new Date();
-        const cityMap = [
-            ['🇩🇪', 'Berlin', 'Europe/Berlin'],
-            ['🇷🇸', 'Belgrade', 'Europe/Belgrade'],
-            ['🇺🇦', 'Kyiv', 'Europe/Kyiv'],
-            ['🇧🇾', 'Minsk', 'Europe/Minsk'],
-            ['🇬🇪', 'Tbilisi', 'Asia/Tbilisi'],
-            ['🍏', 'Pacific Time', 'America/Los_Angeles'],
-        ];
+        if (throttella(ctx, 'time', 5000)) {
+            return;
+        }
 
-        const str = cityMap
-            .map(cityArr => (
-                `${cityArr[0]}` +
-                ` ${escapeMarkdown(formatInTimeZone(date, cityArr[2], 'HH:mm'))}` +
-                ` *${escapeMarkdown(cityArr[1])}*` +
-                ` ${escapeMarkdown(formatInTimeZone(date, cityArr[2], 'x'))} `
-            ))
-            .join('\n');
+        const out = getTimes();
+        await ctx.reply(out, { parse_mode: 'MarkdownV2' });
+    });
 
-        await ctx.reply((str), { parse_mode: 'MarkdownV2' });
+    bot.command(['currency', 'q'], async (ctx: SessionContext) => {
+        if (throttella(ctx, 'currency', 1000)) {
+            return;
+        }
+
+        const message = ctx.message?.reply_to_message?.text || ctx.message?.reply_to_message?.caption || ctx.match;
+        if (!message || typeof message !== 'string') {
+            return;
+        }
+
+        const result = detectCurrency(message);
+        if (!result.currency) {
+            return;
+        }
+
+        // Update currency exchange rates
+        const diffMax = 1000 * 60 * 60 * 6; // = 6 hours
+        if (Date.now() - ctx.session.currencyData.lastUpdate > diffMax) {
+            ctx.session.currencyData = convertFixerData(await getCurrencyData(fixerToken));
+            logger.info('Currency data updated');
+        }
+
+        const out = prepareMessage(ctx.session.currencyData, result);
+        await ctx.reply(out, { parse_mode: 'MarkdownV2' });
     });
 }
 
 async function main() {
     await initBot(bot);
-    bot.start( { drop_pending_updates: true }).then(() => { logger.warn('HOW?') });
+    bot
+        .start( { drop_pending_updates: true })
+        .then(() => { logger.warn('HOW?') });
 }
 
 try {

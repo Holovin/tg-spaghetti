@@ -18,9 +18,9 @@ export async function requestAi(openai: OpenAI, content: string): Promise<SPGTRe
     try {
         const chatCompletion = await openai.chat.completions.create({
             messages: [
-                { role: 'user', content: content }
+                { role: 'user', content: content },
             ],
-            model: 'gpt-3.5-turbo',
+            model: 'gpt-4',
             max_tokens: 2000,
         });
 
@@ -58,4 +58,33 @@ export async function requestAi(openai: OpenAI, content: string): Promise<SPGTRe
     }
 
     return { success: false }
+}
+
+export function processAiMsg(aiMsg: SPGTResponse): string {
+    if (!aiMsg.success) {
+        return `💥 [${aiMsg.result?.reason}] ${aiMsg.result?.message ?? 'No error text'}`;
+    }
+
+    if (!aiMsg.result) {
+        return `💥 No response from AI`;
+    }
+
+    let extra = '';
+    if (aiMsg.result.reason === 'content_filter') {
+        extra += '🔞';
+    } else if (aiMsg.result.reason === 'function_call') {
+        extra += '🤡';
+    } else if (aiMsg.result.reason === 'length') {
+        extra += '✂️';
+    } else if (aiMsg.result.reason === 'stop') {
+        // extra += '🤖';
+    } else {
+        extra += aiMsg.result.reason ?? '?';
+    }
+
+    const text = aiMsg.result.message.length > 3500
+        ? `${aiMsg.result.message.substring(0, 3500)}...🔪`
+        : aiMsg.result.message;
+
+    return `${extra} ${text}`;
 }
