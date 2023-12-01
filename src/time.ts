@@ -1,8 +1,13 @@
 import { escapeMarkdown } from './helpers';
 import { formatInTimeZone } from 'date-fns-tz';
+import * as chrono from 'chrono-node';
+import { differenceInCalendarDays } from 'date-fns';
 
-export function getTimes(): string {
-    const date = new Date();
+export function processDate(message: string): Date {
+    return chrono.parseDate(message);
+}
+
+export function getTimesEscaped(date: Date): string {
     const cityMap = [
         ['🇩🇪', 'Berlin', 'Europe/Berlin'],
         ['🇷🇸', 'Belgrade', 'Europe/Belgrade'],
@@ -10,15 +15,23 @@ export function getTimes(): string {
         ['🇧🇾', 'Minsk', 'Europe/Minsk'],
         ['🇷🇺', 'Moscow', 'Europe/Moscow'],
         ['🇬🇪', 'Tbilisi', 'Asia/Tbilisi'],
-        ['🍏', 'Pacific Time', 'America/Los_Angeles'],
     ];
 
-    return cityMap
-        .map(cityArr => (
-            `${cityArr[0]}` +
-            ` ${escapeMarkdown(formatInTimeZone(date, cityArr[2], 'HH:mm'))}` +
-            ` *${escapeMarkdown(cityArr[1])}*` +
-            ` ${escapeMarkdown(formatInTimeZone(date, cityArr[2], 'x'))} `
-        ))
-        .join('\n');
+    const out: string[] = [];
+    const now = new Date();
+
+    for (const city of cityMap) {
+        let isSameDay = differenceInCalendarDays(now, date) === 0;
+
+        out.push(
+            `${city[0]}` +
+            ` ${escapeMarkdown(formatInTimeZone(date, city[2], isSameDay ? 'HH:mm' : 'dd MMM HH:mm'))}` +
+            ` *${escapeMarkdown(city[1])}*` +
+            ` ${escapeMarkdown(formatInTimeZone(date, city[2], 'x'))} `
+        )
+
+    }
+
+    out.push(`🤖 ${Math.floor(Date.now() / 1000)} *TS*`);
+    return out.join('\n');
 }

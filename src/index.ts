@@ -5,7 +5,7 @@ import OpenAI from 'openai';
 import { processAiMsg, requestAi } from './gpt';
 import { escapeMarkdown } from './helpers';
 import { convertFixerData, CurrencyData, detectCurrency, getCurrencyData, prepareMessage } from './currency';
-import { getTimes } from './time';
+import { getTimesEscaped, processDate } from './time';
 import { draw, random } from 'radash';
 import i18next from 'i18next';
 import Backend, { FsBackendOptions } from 'i18next-fs-backend';
@@ -14,7 +14,6 @@ i18next
     .use(Backend)
     .init<FsBackendOptions>({
         lng: 'en',
-        debug: true,
         backend: {
             loadPath: 'local.{{lng}}.json',
         }
@@ -55,7 +54,7 @@ async function checkAccess(ctx: SessionContext, next: NextFunction): Promise<voi
     const chatId = ctx?.message?.chat?.id;
     if (!chatId || (chatId !== configChatId && chatId !== adminId)) {
         logger.debug(`mid: skip message from --  ${ctx.update.update_id} -- ${chatId}`);
-        bot.api.sendMessage(adminId, escapeMarkdown(`Access warning! From ${chatId}}`), { parse_mode: 'MarkdownV2'}).then(() => {});
+        bot.api.sendMessage(adminId, escapeMarkdown(`Access warning! From ${chatId}, dump: ${JSON.stringify(ctx.update)}`), { parse_mode: 'MarkdownV2'}).then(() => {});
         return;
     }
 
@@ -251,7 +250,7 @@ async function initBot(bot: Bot<SessionContext>) {
     });
 
     bot.command('vermishel', async (ctx: SessionContext) => {
-        if (throttella(ctx, 'vermishel', 5000)) {
+        if (throttella(ctx, 'vermishel', 3000)) {
             return;
         }
 
@@ -269,12 +268,32 @@ async function initBot(bot: Bot<SessionContext>) {
     });
 
     bot.command('time', async (ctx: SessionContext) => {
-        if (throttella(ctx, 'time', 5000)) {
+        if (throttella(ctx, 'time', 3000)) {
             return;
         }
 
-        const out = getTimes();
+        const out = getTimesEscaped(new Date());
         await ctx.reply(out, { parse_mode: 'MarkdownV2' });
+    });
+
+    bot.command('parse', async (ctx: SessionContext) => {
+        if (throttella(ctx, 'parse', 3000)) {
+            return;
+        }
+
+        const message = ctx.message?.reply_to_message?.text || ctx.message?.reply_to_message?.caption || ctx.match;
+        if (!message || typeof message !== 'string') {
+            return;
+        }
+
+        const out = processDate(message);
+
+        if (!out) {
+            await ctx.reply(escapeMarkdown(':('), { parse_mode: 'MarkdownV2' });
+            return;
+        }
+
+        await ctx.reply(getTimesEscaped(out), { parse_mode: 'MarkdownV2' });
     });
 
     bot.command(['currency', 'q'], async (ctx: SessionContext) => {
@@ -301,6 +320,15 @@ async function initBot(bot: Bot<SessionContext>) {
 
         const out = prepareMessage(ctx.session.currencyData, result);
         await ctx.reply(out, { parse_mode: 'MarkdownV2' });
+    });
+
+    bot.catch((error) => {
+        const message =
+            `🧨 *${escapeMarkdown(error.message)}*\n` +
+            '```' + escapeMarkdown(error.stack + '') + '```'
+        ;
+
+        bot.api.sendMessage(adminId, message, { parse_mode: 'MarkdownV2' });
     });
 }
 
