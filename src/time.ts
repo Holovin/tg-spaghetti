@@ -7,7 +7,7 @@ export function processDate(message: string): Date {
     return chrono.parseDate(message);
 }
 
-export function getTimesEscaped(date: Date): string {
+export function getTimesEscaped(date: Date, header = ''): string {
     const cityMap = [
         ['🇩🇪', 'Berlin', 'Europe/Berlin'],
         ['🇷🇸', 'Belgrade', 'Europe/Belgrade'],
@@ -17,7 +17,7 @@ export function getTimesEscaped(date: Date): string {
         ['🇬🇪', 'Tbilisi', 'Asia/Tbilisi'],
     ];
 
-    const out: string[] = [];
+    const out: string[] = header ? [header] : [];
     const now = new Date();
 
     for (const city of cityMap) {

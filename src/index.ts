@@ -9,6 +9,7 @@ import { getTimesEscaped, processDate } from './time';
 import { draw, random } from 'radash';
 import i18next from 'i18next';
 import Backend, { FsBackendOptions } from 'i18next-fs-backend';
+import { format } from 'date-fns';
 
 i18next
     .use(Backend)
@@ -272,17 +273,17 @@ async function initBot(bot: Bot<SessionContext>) {
         await countella(ctx, 'vermishel', 5);
     });
 
-    bot.command('time', async (ctx: SessionContext) => {
-        if (throttella(ctx, 'time', 3000)) {
+    bot.command('now', async (ctx: SessionContext) => {
+        if (throttella(ctx, 'now', 3000)) {
             return;
         }
 
-        const out = getTimesEscaped(new Date());
+        const out = getTimesEscaped(new Date(), '*⌛ Current time *\n');
         await ctx.reply(out, { parse_mode: 'MarkdownV2' });
     });
 
-    bot.command('parse', async (ctx: SessionContext) => {
-        if (throttella(ctx, 'parse', 3000)) {
+    bot.command('time', async (ctx: SessionContext) => {
+        if (throttella(ctx, 'time', 3000)) {
             return;
         }
 
@@ -296,7 +297,8 @@ async function initBot(bot: Bot<SessionContext>) {
             return;
         }
 
-        await ctx.reply(getTimesEscaped(out), { parse_mode: 'MarkdownV2' });
+        const parsedTime = `*${escapeMarkdown(format(out, '⌛ dd MMM HH:mm (x)'))} is\\.\\.\\.*\n`;
+        await ctx.reply(getTimesEscaped(out, parsedTime), { parse_mode: 'MarkdownV2' });
     });
 
     bot.command(['currency', 'q'], async (ctx: SessionContext) => {
