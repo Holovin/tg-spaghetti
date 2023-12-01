@@ -83,6 +83,11 @@ async function skipNonReplies(ctx: SessionContext, next: NextFunction): Promise<
 
 function throttella(ctx: SessionContext, key: string, limitMs: number): boolean {
     const now = Date.now();
+    if (!ctx.session.throttleMap[key]) {
+        ctx.session.throttleMap[key] = now;
+        return false;
+    }
+
     if (now - ctx.session.throttleMap[key] < limitMs) {
         logger.debug(`skip -- ${key}`);
         ctx.session.throttleMap[key] = now; // update too for prevent spamming
@@ -287,9 +292,7 @@ async function initBot(bot: Bot<SessionContext>) {
         }
 
         const out = processDate(message);
-
         if (!out) {
-            await ctx.reply(escapeMarkdown(':('), { parse_mode: 'MarkdownV2' });
             return;
         }
 
