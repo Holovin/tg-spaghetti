@@ -6,10 +6,9 @@ import { processAiMsg, requestAi } from './gpt';
 import { escapeMarkdown } from './helpers';
 import { convertFixerData, CurrencyData, detectCurrency, getCurrencyData, prepareMessage } from './currency';
 import { getTimesEscaped, processDate } from './time';
-import { capitalize, draw, random } from 'radash';
+import { capitalize, draw, max, random } from 'radash';
 import i18next from 'i18next';
 import Backend, { FsBackendOptions } from 'i18next-fs-backend';
-import { format } from 'date-fns';
 import { ParsedResult } from 'chrono-node';
 
 i18next
@@ -296,9 +295,8 @@ async function initBot(bot: Bot<SessionContext>) {
         let out: ParsedResult[] = [];
         for (const locale of ['ru', 'uk', 'en']) {
             const result = processDate(locale, message);
-            if (result.length) {
-                out = result;
-                break;
+            if (result.length > 0) {
+                out.push(result[0]);
             }
         }
 
@@ -306,8 +304,12 @@ async function initBot(bot: Bot<SessionContext>) {
             return;
         }
 
-        const parsedTime = `*⌛ ${escapeMarkdown(capitalize(out[0].text))} *\n`;
-        await ctx.reply(getTimesEscaped(out[0].date(), parsedTime), { parse_mode: 'MarkdownV2' });
+        const bestOut = max(out, result => {
+            return Object.keys(result.start['knownValues']).length;
+        });
+
+        const parsedTime = `*⌛ ${escapeMarkdown(capitalize(bestOut!.text))} *\n`;
+        await ctx.reply(getTimesEscaped(bestOut!.date(), parsedTime), { parse_mode: 'MarkdownV2' });
     });
 
     bot.command(['currency', 'q'], async (ctx: SessionContext) => {
