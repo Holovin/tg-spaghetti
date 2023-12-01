@@ -1,5 +1,5 @@
 import { escapeMarkdown } from './helpers';
-import { formatInTimeZone } from 'date-fns-tz';
+import { formatInTimeZone, utcToZonedTime } from 'date-fns-tz';
 import * as chrono from 'chrono-node';
 import { differenceInCalendarDays } from 'date-fns';
 import { ParsedResult } from 'chrono-node';
@@ -22,11 +22,11 @@ export function getTimesEscaped(date: Date, header = ''): string {
     const now = new Date();
 
     for (const city of cityMap) {
-        let isSameDay = differenceInCalendarDays(now, date) === 0;
+        let isSameDay = differenceInCalendarDays(utcToZonedTime(now, city[2]), utcToZonedTime(date, city[2])) === 0;
 
         out.push(
             `${city[0]}` +
-            ` ${escapeMarkdown(formatInTimeZone(date, city[2], isSameDay ? 'HH:mm' : 'dd MMM HH:mm'))}` +
+            ` ${escapeMarkdown(formatInTimeZone(date, city[2], isSameDay ? 'HH:mm' : 'HH:mm (dd MMM)'))}` +
             ` *${escapeMarkdown(city[1])}*` +
             ` ${escapeMarkdown(formatInTimeZone(date, city[2], 'x'))} `
         )
