@@ -2,9 +2,10 @@ import { escapeMarkdown } from './helpers';
 import { formatInTimeZone } from 'date-fns-tz';
 import * as chrono from 'chrono-node';
 import { differenceInCalendarDays } from 'date-fns';
+import { ParsedResult } from 'chrono-node';
 
-export function processDate(message: string): Date {
-    return chrono.parseDate(message);
+export function processDate(locale: string, message: string): ParsedResult[] {
+    return chrono[locale].parse(message);
 }
 
 export function getTimesEscaped(date: Date, header = ''): string {
