@@ -6,7 +6,7 @@ import { processAiMsg, requestAi } from './gpt';
 import { escapeMarkdown } from './helpers';
 import { convertFixerData, CurrencyData, detectCurrency, getCurrencyData, prepareMessage } from './currency';
 import { getTimesEscaped, processDate } from './time';
-import { capitalize, draw, max, random } from 'radash';
+import { draw, max, random } from 'radash';
 import i18next from 'i18next';
 import Backend, { FsBackendOptions } from 'i18next-fs-backend';
 import { ParsedResult } from 'chrono-node';
@@ -28,7 +28,7 @@ const adminId = +config.get('telegram:admin');
 const telegramToken = config.get('telegram:token');
 const aiToken = config.get('openai:token');
 const fixerToken = config.get('fixer:token');
-
+const telegramUsersConfig = config.get('telegram:users');
 
 const openai = new OpenAI({ apiKey: aiToken });
 
@@ -274,7 +274,7 @@ async function initBot(bot: Bot<SessionContext>) {
     });
 
     bot.command('now', async (ctx: SessionContext) => {
-        if (throttella(ctx, 'now', 3000)) {
+        if (throttella(ctx, 'now', 1500)) {
             return;
         }
 
@@ -283,18 +283,19 @@ async function initBot(bot: Bot<SessionContext>) {
     });
 
     bot.command('time', async (ctx: SessionContext) => {
-        if (throttella(ctx, 'time', 3000)) {
+        if (throttella(ctx, 'time', 1000)) {
             return;
         }
 
+        const userName = ctx.message?.from.username;
         const message = ctx.message?.reply_to_message?.text || ctx.message?.reply_to_message?.caption || ctx.match;
-        if (!message || typeof message !== 'string') {
+        if (!message || !userName || typeof message !== 'string') {
             return;
         }
 
         let out: ParsedResult[] = [];
         for (const locale of ['ru', 'uk', 'en']) {
-            const result = processDate(locale, message);
+            const result = processDate(locale, message, telegramUsersConfig[userName].tz ?? "Europe/Berlin");
             if (result.length > 0) {
                 out.push(result[0]);
             }
@@ -308,8 +309,15 @@ async function initBot(bot: Bot<SessionContext>) {
             return Object.keys(result.start['knownValues']).length;
         });
 
-        const parsedTime = `*⌛ ${escapeMarkdown(capitalize(bestOut!.text))} *\n`;
-        await ctx.reply(getTimesEscaped(bestOut!.date(), parsedTime), { parse_mode: 'MarkdownV2' });
+        let bestOutText = bestOut!.text.charAt(0).toUpperCase() + bestOut!.text.slice(1);
+        let bestOutDate = bestOut!.date();
+
+        if (telegramUsersConfig[userName]) {
+            bestOutText += ` 🪄`;
+        }
+
+        const parsedTime = `*⌛ ${escapeMarkdown(bestOutText)} *\n`;
+        await ctx.reply(getTimesEscaped(bestOutDate, parsedTime), { parse_mode: 'MarkdownV2' });
     });
 
     bot.command(['currency', 'q'], async (ctx: SessionContext) => {

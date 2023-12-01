@@ -4,8 +4,10 @@ import * as chrono from 'chrono-node';
 import { differenceInCalendarDays } from 'date-fns';
 import { ParsedResult } from 'chrono-node';
 
-export function processDate(locale: string, message: string): ParsedResult[] {
-    return chrono[locale].parse(message);
+export function processDate(locale: string, message: string, tz: string): ParsedResult[] {
+    return chrono[locale].parse(message, {
+        timezone: tz,
+    });
 }
 
 export function getTimesEscaped(date: Date, header = ''): string {
