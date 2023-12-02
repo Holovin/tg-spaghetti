@@ -256,7 +256,7 @@ async function initBot(bot: Bot<SessionContext>) {
     });
 
     bot.command('vermishel', async (ctx: SessionContext) => {
-        if (throttella(ctx, 'vermishel', 3000)) {
+        if (throttella(ctx, 'vermishel', 1500)) {
             return;
         }
 
@@ -295,7 +295,7 @@ async function initBot(bot: Bot<SessionContext>) {
 
         let out: ParsedResult[] = [];
         for (const locale of ['ru', 'uk', 'en']) {
-            const result = processDate(locale, message, telegramUsersConfig[userName].tz ?? "Europe/Berlin");
+            const result = processDate(locale, message, telegramUsersConfig[userName]?.tz ?? "Europe/Berlin");
             if (result.length > 0) {
                 out.push(result[0]);
             }
