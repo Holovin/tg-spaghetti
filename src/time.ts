@@ -24,7 +24,12 @@ export function getTimesEscaped(date: Date, header = ''): string {
     const now = new Date();
 
     for (const city of cityMap) {
-        let isSameDay = differenceInCalendarDays(utcToZonedTime(now, city[2]), utcToZonedTime(date, city[2])) === 0;
+        let isSameDay =
+            differenceInCalendarDays(now, utcToZonedTime(date, city[2])) === 0;
+
+        console.log(JSON.stringify(utcToZonedTime(now, city[2])));
+
+        console.log(`${city[1]} -- ${isSameDay}`);
 
         out.push(
             `${city[0]}` +
