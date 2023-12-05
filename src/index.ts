@@ -1,4 +1,4 @@
-import { Api, Bot, Context, NextFunction, RawApi, session, SessionFlavor } from 'grammy';
+import { Api, Bot, Context, InputFile, NextFunction, RawApi, session, SessionFlavor } from 'grammy';
 import nconf from 'nconf';
 import { createLoggerWrap } from './logger';
 import OpenAI from 'openai';
@@ -12,6 +12,7 @@ import Backend, { FsBackendOptions } from 'i18next-fs-backend';
 import { getShopLink } from './fortik';
 import { utcToZonedTime } from 'date-fns-tz';
 import { format } from 'date-fns';
+import axios from 'axios';
 
 i18next
     .use(Backend)
@@ -354,8 +355,11 @@ async function initBot(bot: Bot<SessionContext>) {
 
         const fortikDate = utcToZonedTime(date, 'Etc/UTC');
         const url = getShopLink(fortikDate);
-        await ctx.replyWithPhoto(url, {
-            caption: `*Fortik\\) shop:* ${escapeMarkdown(format(fortikDate, 'HH:mm dd MMM yyyy'))}`,
+        const file = await axios.get(url, { responseType: 'arraybuffer' });
+        const fileInput = new InputFile(file.data, `${url}---${random(0, 99999)}`);
+
+        await ctx.replyWithPhoto(fileInput, {
+            caption: `*Fortik\\) shop:* ${escapeMarkdown(format(fortikDate, 'HH:mm, d MMM yyyy'))}`,
             parse_mode: 'MarkdownV2',
         });
     });
