@@ -5,11 +5,13 @@ import OpenAI from 'openai';
 import { processAiMsg, requestAi } from './gpt';
 import { escapeMarkdown } from './helpers';
 import { convertFixerData, CurrencyData, detectCurrency, getCurrencyData, prepareMessage } from './currency';
-import { getTimesEscaped, processDate } from './time';
-import { draw, max, random } from 'radash';
+import { getTimesEscaped, processDateBest } from './time';
+import { draw, random } from 'radash';
 import i18next from 'i18next';
 import Backend, { FsBackendOptions } from 'i18next-fs-backend';
-import { ParsedResult } from 'chrono-node';
+import { getShopLink } from './fortik';
+import { utcToZonedTime } from 'date-fns-tz';
+import { format } from 'date-fns';
 
 i18next
     .use(Backend)
@@ -20,6 +22,7 @@ i18next
         }
     });
 
+export const SERVER_TZ = 'Europe/Berlin';
 const config = nconf.env().file({ file: 'config.json' });
 const logger = createLoggerWrap();
 
@@ -293,23 +296,12 @@ async function initBot(bot: Bot<SessionContext>) {
             return;
         }
 
-        let out: ParsedResult[] = [];
-        for (const locale of ['ru', 'uk', 'en']) {
-            const result = processDate(locale, message, telegramUsersConfig[userName]?.tz ?? "Europe/Berlin");
-            if (result.length > 0) {
-                out.push(result[0]);
-            }
-        }
-
-        if (!out.length) {
+        const bestOut = processDateBest(message, telegramUsersConfig[userName]?.tz ?? SERVER_TZ);
+        if (!bestOut) {
             return;
         }
 
-        const bestOut = max(out, result => {
-            return Object.keys(result.start['knownValues']).length;
-        });
-
-        let bestOutText = bestOut!.text.charAt(0).toUpperCase() + bestOut!.text.slice(1);
+        let bestOutText = '' + bestOut!.text.charAt(0).toUpperCase() + bestOut!.text.slice(1);
         let bestOutDate = bestOut!.date();
 
         if (telegramUsersConfig[userName]) {
@@ -344,6 +336,28 @@ async function initBot(bot: Bot<SessionContext>) {
 
         const out = prepareMessage(ctx.session.currencyData, result);
         await ctx.reply(out, { parse_mode: 'MarkdownV2' });
+    });
+
+    bot.command('shop', async (ctx: SessionContext) => {
+        if (throttella(ctx, 'shop', 5000)) {
+            return;
+        }
+
+        const message = ctx.match;
+        let date = new Date();
+        if (typeof message === 'string') {
+            const result = processDateBest(message, SERVER_TZ);
+            if (result) {
+                date = result.date();
+            }
+        }
+
+        const fortikDate = utcToZonedTime(date, 'Etc/UTC');
+        const url = getShopLink(fortikDate);
+        await ctx.replyWithPhoto(url, {
+            caption: `*Fortik\\) shop:* ${escapeMarkdown(format(fortikDate, 'HH:mm dd MMM yyyy'))}`,
+            parse_mode: 'MarkdownV2',
+        });
     });
 
     bot.catch((error) => {

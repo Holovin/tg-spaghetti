@@ -1,12 +1,32 @@
 import { escapeMarkdown } from './helpers';
 import { formatInTimeZone, utcToZonedTime } from 'date-fns-tz';
 import * as chrono from 'chrono-node';
-import { differenceInCalendarDays } from 'date-fns';
 import { ParsedResult } from 'chrono-node';
+import { differenceInCalendarDays } from 'date-fns';
+import { max } from 'radash';
+
 
 export function processDate(locale: string, message: string, tz: string): ParsedResult[] {
     return chrono[locale].parse(message, {
         timezone: tz,
+    });
+}
+
+export function processDateBest(message: string, inputTz: string) {
+    let out: ParsedResult[] = [];
+    for (const locale of ['ru', 'uk', 'en']) {
+        const result = processDate(locale, message, inputTz);
+        if (result.length > 0) {
+            out.push(result[0]);
+        }
+    }
+
+    if (!out.length) {
+        return null;
+    }
+
+    return max(out, result => {
+        return Object.keys(result.start['knownValues']).length;
     });
 }
 
@@ -24,12 +44,7 @@ export function getTimesEscaped(date: Date, header = ''): string {
     const now = new Date();
 
     for (const city of cityMap) {
-        let isSameDay =
-            differenceInCalendarDays(now, utcToZonedTime(date, city[2])) === 0;
-
-        console.log(JSON.stringify(utcToZonedTime(now, city[2])));
-
-        console.log(`${city[1]} -- ${isSameDay}`);
+        let isSameDay = differenceInCalendarDays(now, utcToZonedTime(date, city[2])) === 0;
 
         out.push(
             `${city[0]}` +
