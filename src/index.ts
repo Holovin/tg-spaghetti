@@ -1,18 +1,19 @@
 import { Api, Bot, Context, InputFile, NextFunction, RawApi, session, SessionFlavor } from 'grammy';
 import nconf from 'nconf';
-import { createLoggerWrap } from './logger';
 import OpenAI from 'openai';
+import axios from 'axios';
+import { draw, random } from 'radash';
+import i18next from 'i18next';
+import Backend, { FsBackendOptions } from 'i18next-fs-backend';
+import { utcToZonedTime } from 'date-fns-tz';
+import { format } from 'date-fns';
+
 import { processAiMsg, requestAi } from './gpt';
 import { escapeMarkdown } from './helpers';
 import { convertFixerData, CurrencyData, detectCurrency, getCurrencyData, prepareMessage } from './currency';
 import { getTimesEscaped, processDateBest } from './time';
-import { draw, random } from 'radash';
-import i18next from 'i18next';
-import Backend, { FsBackendOptions } from 'i18next-fs-backend';
+import { createLoggerWrap } from './logger';
 import { getShopLink } from './fortik';
-import { utcToZonedTime } from 'date-fns-tz';
-import { format } from 'date-fns';
-import axios from 'axios';
 
 i18next
     .use(Backend)
@@ -128,7 +129,8 @@ async function setLoop(trigger: string, payload: string, bot: Bot<SessionContext
     logger.info(`[${trigger}] up_id = ${ctx.update.update_id}, from = ${chatId}, payload = ${payload}`);
 
     ctx.session.isBusy = true;
-    await bot.api.sendChatAction(chatId, 'typing');
+    bot.api.sendChatAction(chatId, 'typing').then(() => {})
+    ctx.react('👍').then(() => {});
 
     const id = setInterval(() => {
         bot.api.sendChatAction(chatId, 'typing').then(() => {});
@@ -142,6 +144,7 @@ async function setLoop(trigger: string, payload: string, bot: Bot<SessionContext
     if (!payload) {
         clearLoop(ctx, id);
         logger.info(`[${trigger}] up_id = ${ctx.update.update_id}, skip no payload`);
+        ctx.react('👎').then(() => {});
         clearTimeout(watchId);
         return;
     }
