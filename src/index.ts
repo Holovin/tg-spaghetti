@@ -21,9 +21,11 @@ i18next
         backend: {
             loadPath: 'local.{{lng}}.json',
         }
-    });
+    }).then(r => {});
 
 export const SERVER_TZ = 'Europe/Berlin';
+const SPAM_WAIT_MS = 1000;
+
 const config = nconf.env().file({ file: 'config.json' });
 const logger = createLoggerWrap();
 
@@ -260,7 +262,7 @@ async function initBot(bot: Bot<SessionContext>) {
     });
 
     bot.command('vermishel', async (ctx: SessionContext) => {
-        if (throttella(ctx, 'vermishel', 1500)) {
+        if (throttella(ctx, 'vermishel', SPAM_WAIT_MS)) {
             return;
         }
 
@@ -274,11 +276,11 @@ async function initBot(bot: Bot<SessionContext>) {
             return;
         }
 
-        await countella(ctx, 'vermishel', 5);
+        await countella(ctx, 'vermishel', 20);
     });
 
     bot.command('now', async (ctx: SessionContext) => {
-        if (throttella(ctx, 'now', 1500)) {
+        if (throttella(ctx, 'now', SPAM_WAIT_MS)) {
             return;
         }
 
@@ -287,7 +289,7 @@ async function initBot(bot: Bot<SessionContext>) {
     });
 
     bot.command('time', async (ctx: SessionContext) => {
-        if (throttella(ctx, 'time', 1000)) {
+        if (throttella(ctx, 'time', SPAM_WAIT_MS)) {
             return;
         }
 
@@ -314,7 +316,7 @@ async function initBot(bot: Bot<SessionContext>) {
     });
 
     bot.command(['currency', 'q'], async (ctx: SessionContext) => {
-        if (throttella(ctx, 'currency', 1000)) {
+        if (throttella(ctx, 'currency', SPAM_WAIT_MS)) {
             return;
         }
 
@@ -340,7 +342,7 @@ async function initBot(bot: Bot<SessionContext>) {
     });
 
     bot.command('shop', async (ctx: SessionContext) => {
-        if (throttella(ctx, 'shop', 5000)) {
+        if (throttella(ctx, 'shop', SPAM_WAIT_MS * 10)) {
             return;
         }
 
@@ -369,6 +371,8 @@ async function initBot(bot: Bot<SessionContext>) {
             `🧨 *${escapeMarkdown(error.message)}*\n` +
             '```' + escapeMarkdown(error.stack + '') + '```'
         ;
+
+        console.log(JSON.stringify(error));
 
         bot.api.sendMessage(adminId, message, { parse_mode: 'MarkdownV2' });
     });
