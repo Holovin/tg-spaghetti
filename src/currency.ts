@@ -113,12 +113,17 @@ export function convertFixerData(data: FixerResponse | null): CurrencyData {
     }
 }
 
+interface RateResult {
+    currency: string;
+    result: string;
+}
+
 export function prepareMessage(currencyData: CurrencyData, result: CurrencyResult): string {
     let out = `💵 *${escapeMarkdown(result.value.toString())} ${result.currency} *\n\n`;
+    let outRates: RateResult[] = [];
+    let maxLength = result.value.toString().length + result.currency.length + 2;
 
     for (const currencyGroup of currenciesGroups) {
-        const groupStr: string[] = [];
-
         for (const currency of currencyGroup) {
             if (currency === result.currency) {
                 continue;
@@ -135,17 +140,23 @@ export function prepareMessage(currencyData: CurrencyData, result: CurrencyResul
                 ? Math.round(exchangeValue)
                 : Math.round((exchangeValue + Number.EPSILON) * 10) / 10;
 
-            groupStr.push(`*${currenciesMap[currency].symbol}* ${
-                escapeMarkdown(
-                    exchangeValueRounded === 0 
-                        ? exchangeValue.toFixed(2)
-                        : exchangeValueRounded.toString()
-                )
-            }`);
-        }
+            const val =
+                exchangeValueRounded === 0 ? exchangeValue.toFixed(2) : exchangeValueRounded.toString();
 
-        out += `${groupStr.join('\n')}\n`;
+            outRates.push({
+                currency: currenciesMap[currency].symbol,
+                result: val,
+            })
+
+            if (val.length > maxLength) {
+                maxLength = val.length;
+            }
+        }
     }
+
+    out += outRates
+        .map(rate => `\`${rate.currency} ${escapeMarkdown(rate.result.padStart(maxLength, ' '))}\``)
+        .join('\n');
 
     return out;
 }
