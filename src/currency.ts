@@ -155,7 +155,7 @@ export function prepareMessage(currencyData: CurrencyData, result: CurrencyResul
     }
 
     out += outRates
-        .map(rate => `\`${rate.currency} ${escapeMarkdown(rate.result.padStart(maxLength, ' '))}\``)
+        .map(rate => `\`${rate.currency} ${escapeMarkdown(rate.result.padEnd(maxLength, ' '))}\``)
         .join('\n');
 
     return out;
