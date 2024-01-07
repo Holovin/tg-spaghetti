@@ -50,7 +50,7 @@ const currenciesMap = {
         dropLimit: 500,
     },
     'RUB': {
-        triggers: ['RUB', '₽', 'рубл'],
+        triggers: ['RUB', '₽', 'руб'],
         symbol: '₽',
         dropLimit: 500,
     },
