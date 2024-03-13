@@ -80,7 +80,7 @@ export async function getCurrencyData(token: string): Promise<FixerResponse | nu
 
 export function detectCurrency(message: string): CurrencyResult {
     for (const [currencyCode, currencyObj] of Object.entries(currenciesMap)) {
-        const regexp = new RegExp(`(\\d+([.,]\\d+)?).*(${currencyObj.triggers.join('|')})`, 'mi');
+        const regexp = new RegExp(`(\\d+([.,]\\d+)?)\\s*(${currencyObj.triggers.join('|')})`, 'mi');
         const match = message.match(regexp);
 
         if (match && match.length > 1) {
