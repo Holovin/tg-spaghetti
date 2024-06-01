@@ -20,7 +20,7 @@ export async function requestAi(openai: OpenAI, content: string): Promise<SPGTRe
             messages: [
                 { role: 'user', content: content },
             ],
-            model: 'gpt-4-1106-preview',
+            model: 'gpt-4o',
             max_tokens: 4000,
         });
 
