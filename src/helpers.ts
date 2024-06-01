@@ -23,3 +23,12 @@ export function escapeMarkdown(message: string): string {
         .replace(/\./g, '\\.')
         .replace(/\!/g, '\\!');
 }
+
+export function wrapToQuote(message: string): string {
+    return '**'
+        + message
+            .split('\n')
+            .map(line => `>${line}`)
+            .join('\n')
+        + '||';
+}

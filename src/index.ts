@@ -9,7 +9,7 @@ import { utcToZonedTime } from 'date-fns-tz';
 import { format } from 'date-fns';
 
 import { processAiMsg, requestAi } from './gpt';
-import { escapeMarkdown } from './helpers';
+import { escapeMarkdown, wrapToQuote } from './helpers';
 import { convertFixerData, CurrencyData, detectCurrency, getCurrencyData, prepareMessage } from './currency';
 import { getTimesEscaped, processDateBest } from './time';
 import { createLoggerWrap } from './logger';
@@ -157,7 +157,7 @@ async function setLoop(trigger: string, payload: string, bot: Bot<SessionContext
         if (msg) {
             const replyId = ctx.message!.message_id;
             logger.info(`[${trigger}] up_id = ${ctx.update.update_id}, msg = ${msg}`);
-            bot.api.sendMessage(ctx.message!.chat!.id, escapeMarkdown(msg), {
+            bot.api.sendMessage(ctx.message!.chat!.id, wrapToQuote(escapeMarkdown(msg)), {
                 parse_mode: 'MarkdownV2',
                 reply_to_message_id: replyId,
             }).then(() => {});
