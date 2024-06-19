@@ -1,5 +1,8 @@
 import { APIError } from 'openai/error';
 import OpenAI from 'openai';
+import { ChatCompletionCreateParams, ChatCompletionMessageParam } from 'openai/src/resources/chat/completions';
+import { Chat, ChatCompletionContentPartImage } from 'openai/resources';
+import ChatCompletionContentPart = Chat.ChatCompletionContentPart;
 
 export interface SPGTResponse {
     success: boolean;
@@ -14,15 +17,32 @@ export interface SPGTResponse {
     }
 }
 
-export async function requestAi(openai: OpenAI, content: string): Promise<SPGTResponse> {
+export async function requestAi(openai: OpenAI, content: string, imageBase64: string = ''): Promise<SPGTResponse> {
     try {
-        const chatCompletion = await openai.chat.completions.create({
-            messages: [
-                { role: 'user', content: content },
-            ],
+        const req: ChatCompletionCreateParams = {
+            messages: [{
+                role: 'user',
+                content: [{
+                    type: 'text',
+                    text: content,
+                }],
+            }],
             model: 'gpt-4o',
             max_tokens: 4000,
-        });
+        };
+
+        if (imageBase64) {
+            const image: ChatCompletionContentPartImage = {
+                type: 'image_url',
+                image_url: {
+                    url: imageBase64,
+                }
+            };
+
+            (req.messages[0].content as Array<ChatCompletionContentPart>).push(image);
+        }
+
+        const chatCompletion = await openai.chat.completions.create(req);
 
         return {
             success: true,

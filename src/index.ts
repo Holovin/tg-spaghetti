@@ -125,7 +125,7 @@ async function countella(ctx: SessionContext, key: string, threshold: number): P
 }
 
 // QUEUE //
-async function setLoop(trigger: string, payload: string, bot: Bot<SessionContext, Api<RawApi>>, ctx: SessionContext, chatId: number) {
+async function setLoop(trigger: string, payload: string, bot: Bot<SessionContext, Api<RawApi>>, ctx: SessionContext, chatId: number, image: string = '') {
     logger.info(`[${trigger}] up_id = ${ctx.update.update_id}, from = ${chatId}, payload = ${payload}`);
 
     ctx.session.isBusy = true;
@@ -149,15 +149,28 @@ async function setLoop(trigger: string, payload: string, bot: Bot<SessionContext
         return;
     }
 
-    requestAi(openai, payload).then(aiMsg => {
+    requestAi(openai, payload, image).then(aiMsg => {
         const msg = processAiMsg(aiMsg);
-
         clearLoop(ctx, id);
 
         if (msg) {
+            let fullMsg = wrapToQuote(escapeMarkdown(msg));
+            if (image) {
+                let price = 0;
+                if (aiMsg.usage?.input) {
+                    price += 0.000005 * aiMsg.usage?.input;
+                }
+
+                if (aiMsg.usage?.output) {
+                    price += 0.000015 * aiMsg.usage?.output;
+                }
+
+                fullMsg += escapeMarkdown(`\n \nTokens: ${aiMsg.usage?.total} ~ \$${price.toFixed(5)}`);
+            }
+
             const replyId = ctx.message!.message_id;
             logger.info(`[${trigger}] up_id = ${ctx.update.update_id}, msg = ${msg}`);
-            bot.api.sendMessage(ctx.message!.chat!.id, wrapToQuote(escapeMarkdown(msg)), {
+            bot.api.sendMessage(ctx.message!.chat!.id, fullMsg, {
                 parse_mode: 'MarkdownV2',
                 reply_to_message_id: replyId,
             }).then(() => {});
@@ -212,6 +225,7 @@ async function initBot(bot: Bot<SessionContext>) {
     // COMMANDS //
     bot.command('ask', async (ctx: SessionContext) => {
         let ask = '';
+        let image = '';
         if (ctx.message?.reply_to_message?.text) {
             ask += ctx.message!.reply_to_message!.text;
         }
@@ -224,11 +238,26 @@ async function initBot(bot: Bot<SessionContext>) {
             ask = `${ctx.match} ${ask}`;
         }
 
+        if (ctx.message?.reply_to_message?.photo) {
+            const photo = ctx.message.reply_to_message.photo;
+            logger.info(`[ask] photo = ${JSON.stringify(photo)}`);
+
+            const photoId = photo.reduce((max, file) => (file.file_size ?? 0) > (max.file_size ?? 0) ? file : max, photo[0]).file_id;
+            logger.info(`[ask] photoId = ${photoId}`);
+
+            const fileId = await ctx.api.getFile(photoId);
+            logger.info(`[ask] fileId = ${JSON.stringify(fileId)}`);
+
+            const fileResponse = await fetch(`https://api.telegram.org/file/bot${telegramToken}/${(fileId as any).file_path}`);
+            const buffer = await fileResponse.arrayBuffer();
+            image = `data:image/jpg;base64,${Buffer.from(buffer).toString('base64')}`;
+        }
+
         if (!ask.trim()) {
             return;
         }
 
-        await setLoop('ask', ask, bot, ctx, ctx.message!.chat!.id!);
+        await setLoop('ask', ask, bot, ctx, ctx.message!.chat!.id!, image);
     });
 
     bot.command('nepon', skipNonReplies, async (ctx: SessionContext) => {
@@ -383,9 +412,7 @@ async function initBot(bot: Bot<SessionContext>) {
 
 async function main() {
     await initBot(bot);
-    bot
-        .start( { drop_pending_updates: true })
-        .then(() => { logger.warn('HOW?') });
+    bot.start( { drop_pending_updates: true }).then();
 }
 
 try {
