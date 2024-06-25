@@ -251,6 +251,11 @@ async function initBot(bot: Bot<SessionContext>) {
             const fileResponse = await fetch(`https://api.telegram.org/file/bot${telegramToken}/${(fileId as any).file_path}`);
             const buffer = await fileResponse.arrayBuffer();
             image = `data:image/jpg;base64,${Buffer.from(buffer).toString('base64')}`;
+
+            // Ask something because we have photo
+            if (!ask) {
+                ask += i18next.t('prompt.photo');
+            }
         }
 
         if (!ask.trim()) {
