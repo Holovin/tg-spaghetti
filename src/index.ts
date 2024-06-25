@@ -253,7 +253,7 @@ async function initBot(bot: Bot<SessionContext>) {
             image = `data:image/jpg;base64,${Buffer.from(buffer).toString('base64')}`;
 
             // Ask something because we have photo
-            if (!ask) {
+            if (ask.trim() === '') {
                 ask += i18next.t('prompt.photo');
             }
         }
