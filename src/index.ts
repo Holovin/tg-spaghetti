@@ -174,7 +174,7 @@ async function setLoop(trigger: string, payload: string, bot: Bot<SessionContext
                 .then(() => {})
                 .catch((e) => {
                     logger.info(e);
-                    bot.api.sendMessage(ctx.message!.chat!.id, '[POTUJNO PARSE ERORR]\n' + aiMsg, { reply_to_message_id: replyId, });
+                    bot.api.sendMessage(ctx.message!.chat!.id, '[POTUJNO PARSE ERORR]\n' + msg, { reply_to_message_id: replyId, });
                 });
 
         } else {
