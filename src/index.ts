@@ -170,10 +170,13 @@ async function setLoop(trigger: string, payload: string, bot: Bot<SessionContext
 
             const replyId = ctx.message!.message_id;
             logger.info(`[${trigger}] up_id = ${ctx.update.update_id}, msg = ${msg}`);
-            bot.api.sendMessage(ctx.message!.chat!.id, fullMsg, {
-                parse_mode: 'MarkdownV2',
-                reply_to_message_id: replyId,
-            }).then(() => {});
+            bot.api.sendMessage(ctx.message!.chat!.id, fullMsg, { reply_to_message_id: replyId, parse_mode: 'MarkdownV2' })
+                .then(() => {})
+                .catch((e) => {
+                    logger.info(e);
+                    bot.api.sendMessage(ctx.message!.chat!.id, '[POTUJNO PARSE ERORR]\n' + aiMsg, { reply_to_message_id: replyId, });
+                });
+
         } else {
             logger.warn(`[${trigger}] up_id = ${ctx.update.update_id}, no msg`);
         }
