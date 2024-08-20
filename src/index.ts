@@ -66,6 +66,7 @@ async function checkAccess(ctx: SessionContext, next: NextFunction): Promise<voi
         return;
     }
 
+    // bot.api.sendMessage(adminId, `From ${chatId}\n\n${JSON.stringify(ctx.update)}`).then(() => {});
     await next();
 }
 
@@ -413,7 +414,6 @@ async function initBot(bot: Bot<SessionContext>) {
         ;
 
         console.log(JSON.stringify(error));
-
         bot.api.sendMessage(adminId, message, { parse_mode: 'MarkdownV2' });
     });
 }
